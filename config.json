@@ -1,0 +1,49 @@
+/* The config.json file is where you specify additional configuration needed by
+ * your plugin. The details you specify here will be translated to a form on the
+ * UI. The values supplied by the users will then get injected as options on the
+ * platform on ready event.
+ */
+{
+  "host": {
+	"label": "Host",
+	"type": "String",
+	"required": true,
+	"help": "Host server of PostgreSQL."
+  },
+  "port": {
+	"label": "Port",
+	"type": "Number",
+	"required": true,
+	"help": "Listening port of the PostgreSQL Host Server."
+  },
+  "user" : {
+	"label": "User",
+	"type": "String",
+	"required": true,
+	"help": "Username for PostgreSQL Server Authentication."
+  },
+  "password" : {
+	"label": "Password",
+	"type": "String",
+	"required": true,
+	"help": "Password for PostgreSQL Server Authentication."
+  },
+  "database": {
+	"label": "Database",
+	"type": "Stirng",
+	"required": true,
+	"help": "Database name on the PostgreSQL Server."
+  },
+  "table": {
+	"label": "Table",
+	"type": "Stirng",
+	"required": true,
+	"help": "Table name in the PostgreSQL Database where data will be written into."
+  },
+  "fields": {
+	"label": "Fields",
+	"type": "Object",
+	"required": true,
+	"help": "List of the Table Fields/Columns. Input for this field is in JSON format {\"(field_name)\" : {\"source_field\" : \"value\", \"data_type\": \"value\", \"format\": \"value\"}}. field_name will be the name of the column in the MsSQL Table, source_field (required) value will be the name of the field in the JSON Data passed to the plugin, data_type (optional) there are 5 available data types that will convert data to it's proper type before saving we have String, Integer, Float, Boolean and DateTime leaving this blank will just use the current data for the field, format is only available for DateTime data_type this will allow users to format the date/time before saving i.e. (YYYY-MM-DD HH:mm:ss) kindly refer to the moment node module for more details."
+  }
+}
