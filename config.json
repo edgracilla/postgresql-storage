@@ -30,19 +30,19 @@
   },
   "database": {
 	"label": "Database",
-	"type": "Stirng",
+	"type": "String",
 	"required": true,
 	"help": "Database name on the PostgreSQL Server."
   },
   "table": {
 	"label": "Table",
-	"type": "Stirng",
+	"type": "String",
 	"required": true,
 	"help": "Table name in the PostgreSQL Database where data will be written into."
   },
   "fields": {
 	"label": "Fields",
-	"type": "Object",
+	"type": "JSON",
 	"required": true,
 	"help": "List of the Table Fields/Columns. Input for this field is in JSON format {\"(field_name)\" : {\"source_field\" : \"value\", \"data_type\": \"value\", \"format\": \"value\"}}. field_name will be the name of the column in the MsSQL Table, source_field (required) value will be the name of the field in the JSON Data passed to the plugin, data_type (optional) there are 5 available data types that will convert data to it's proper type before saving we have String, Integer, Float, Boolean and DateTime leaving this blank will just use the current data for the field, format is only available for DateTime data_type this will allow users to format the date/time before saving i.e. (YYYY-MM-DD HH:mm:ss) kindly refer to the moment node module for more details."
   }

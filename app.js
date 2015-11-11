@@ -1,10 +1,11 @@
 'use strict';
 
 var platform = require('./platform'),
-	pg = require('pg').Client,
-	moment = require('moment'),
-	isJSON = require('is-json'),
-	_      = require('lodash'),
+	Pg 		 = require('pg').Client,
+	moment   = require('moment'),
+	async    = require('async'),
+	isJSON   = require('is-json'),
+	_        = require('lodash'),
 	parseFields, tableName, client;
 
 
@@ -17,7 +18,7 @@ platform.on('data', function (data) {
 		valueList,
 		first = true;
 
-	_.forEach(parseFields, function(field, key) {
+	async.forEachOf(parseFields, function(field, key, callback) {
 
 		var datum = data[field.source_field],
 			processedDatum;
@@ -56,11 +57,11 @@ platform.on('data', function (data) {
 						var type = typeof datum;
 
 						if ((type === 'string' && datum.toLocaleLowerCase() === 'true') ||
-							(type === 'boolean' && datum === true )) {
-							processedDatum = 1;
+							(type === 'number' && datum === 1 )) {
+							processedDatum = true;
 						} else if ((type === 'string' && datum.toLocaleLowerCase() === 'false') ||
-							(type === 'boolean' && datum === false )) {
-							processedDatum = 0;
+							(type === 'number' && datum === 0 )) {
+							processedDatum = false;
 						} else {
 							processedDatum = datum;
 						}
@@ -110,20 +111,22 @@ platform.on('data', function (data) {
 			columnList = key;
 		}
 
-	});
+		callback();
 
-	client.query('insert into ' + tableName + ' (' + columnList + ') values (' + valueList + ')', function(reqErr, queryset) {
+	}, function() {
+		client.query('insert into ' + tableName + ' (' + columnList + ') values (' + valueList + ')', function(reqErr, queryset) {
 
-		if (reqErr) {
-			console.error('Error creating record on PostgreSQL', reqErr);
-			platform.handleException(reqErr);
-		} else {
-			platform.log(JSON.stringify({
-				title: 'Record Successfully inserted to PostgreSQL.',
-				data: valueList
-			}));
-		}
+			if (reqErr) {
+				console.error('Error creating record on PostgreSQL', reqErr);
+				platform.handleException(reqErr);
+			} else {
+				platform.log(JSON.stringify({
+					title: 'Record Successfully inserted to PostgreSQL.',
+					data: valueList
+				}));
+			}
 
+		});
 	});
 });
 
@@ -152,39 +155,46 @@ platform.on('close', function () {
  */
 platform.once('ready', function (options) {
 
-	try {
-		parseFields = JSON.parse(options.fields);
+	parseFields = JSON.parse(options.fields);
 
-		_.forEach(parseFields, function(field, key) {
-			if (field.source_field === undefined || field.source_field === null) {
-				throw( new Error('Source field is missing for ' + key + ' in PostgreSQL Plugin'));
-			} else if (field.data_type  && (field.data_type !== 'String' && field.data_type !== 'Integer' &&
-				field.data_type !== 'Float'  && field.data_type !== 'Boolean' &&
-				field.data_type !== 'DateTime')) {
-				throw(new Error('Invalid Data Type for ' + key + ' allowed data types are (String, Integer, Float, Boolean, DateTime) in PostgreSQL Plugin'));
+	async.forEachOf(parseFields, function(field, key, callback) {
+		if (_.isEmpty(field.source_field)){
+			callback( new Error('Source field is missing for ' + key + ' in PostgreSQL Plugin'));
+		} else if (field.data_type  && (field.data_type !== 'String' && field.data_type !== 'Integer' &&
+			field.data_type !== 'Float'  && field.data_type !== 'Boolean' &&
+			field.data_type !== 'DateTime')) {
+			callback(new Error('Invalid Data Type for ' + key + ' allowed data types are (String, Integer, Float, Boolean, DateTime) in PostgreSQL Plugin'));
+		} else
+			callback();
+	}, function(e) {
+
+		if (e) {
+			console.error('Error parsing JSON field configuration for PostgreSQL.', e);
+			platform.handleException(e);
+			return;
+		}
+
+		var connection = 'postgres://' + options.user + ':' + options.password + '@' + options.host;
+
+		if (options.port)
+			connection = connection + ':' + options.port;
+
+		connection = connection + '/' + options.database;
+
+		client = new Pg(connection);
+
+		tableName = options.table;
+
+		client.connect(function (err) {
+			if (err) {
+				console.error('Error connecting in PostgreSQL.', err);
+				platform.handleException(err);
+			} else {
+				platform.log('Connected to PostgreSQL.');
+				platform.notifyReady();
 			}
 		});
 
-	} catch (e) {
-		console.error('Error parsing JSON field configuration for PostgreSQL.', e);
-		platform.handleException(e);
-		return;
-	}
-
-	var connection = 'postgres://' + options.user + ':' + options.password + '@' + options.host + '/' + options.database;
-
-	client = new pg(connection);
-
-	tableName = options.table;
-
-	client.connect(function (err) {
-		if (err) {
-			console.error('Error connecting in PostgreSQL.', err);
-			platform.handleException(err);
-		} else {
-			platform.log('Connected to PostgreSQL.');
-			platform.notifyReady();
-		}
 	});
 
 });

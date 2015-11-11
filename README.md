@@ -23,8 +23,48 @@ Uses pg npm library
 1. Input for this field is in JSON format {"(field_name)" : {"source_field" : "value", "data_type": "value", "format": "value"}}.
 2. field_name will be the name of the column in the postgresql Table
 3  source_field (required) value will be the name of the field in the JSON Data passed to the plugin
-4  data_type (optional) there are 5 available data types that will convert data to it's proper type before saving
+4  data_type there are 5 available data types that will convert data to it's proper type before saving
    we have String, Integer, Float, Boolean and DateTime leaving this blank will just use the current data for the field
 5. format is only available for DateTime data_type this will allow users to format the date/time before saving
    i.e. (YYYY-MM-DD HH:mm:ss) kindly refer to the moment node module for more details and the accepted format
    of postgresql
+6. JSON Data is not supported as a data_type but you can save it if there is a field in PostgreSQL
+
+
+{
+    co2_field      	 : {source_field:'co2', data_type: 'String'},
+    temp_field     	 : {source_field:'temp', data_type: 'Integer'},
+    quality_field  	 : {source_field:'quality', data_type: 'Float'},
+    metadata_field 	 : {source_field:'metadata', data_type: 'JSON'},
+    reading_time_field : {source_field:'reading_time', data_type: 'DateTime', format: 'yyyy-MM-ddTHH:mm:ss'},
+    random_data_field  : {source_field:'random_data'},
+    is_normal_field    : {source_field:'is_normal', data_type: 'Boolean'}
+}
+```
+
+Sample Data:
+```
+{
+  co2: '11%',
+  temp: 23,
+  quality: 11.25,
+  metadata: '{"name": "warehouse air conditioning"}',
+  reading_time: '2015-11-27T11:04:13.539Z',
+  random_data: 'abcdefg',
+  is_normal: true
+}
+```
+
+Elastic Search Fields:
+
+Type Field mapping |
+-------------------|
+_id                |
+co2_field          |
+temp_field         |
+quality_field      |
+metadata_field     |
+reading_time_field |
+random_data_field  |
+is_normal_field    |
+

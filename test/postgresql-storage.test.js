@@ -6,7 +6,28 @@
 
 var cp     = require('child_process'),
 	assert = require('assert'),
+	should   = require('should'),
+	moment   = require('moment'),
 	storage;
+
+var HOST = 'pellefant.db.elephantsql.com',
+	USER = 'kzxkistt',
+	PORT = 5432,
+	TABLE = 'reekoh_table',
+	PASSWORD = 'DWl5R1bXUAZ5HcZ-hItxW4cXQXwDs8Ga',
+	DATABASE = 'kzxkistt',
+	_ID  = new Date().getTime();
+
+var record = {
+	_id: _ID,
+	co2: '11%',
+	temp: 23,
+	quality: 11.25,
+	reading_time: '2015-11-27T11:04:13.539Z',
+	metadata: '{"metadata_json": "reekoh metadata json"}',
+	random_data: 'abcdefg',
+	is_normal: true
+};
 
 describe('Storage', function () {
 	this.slow(5000);
@@ -40,13 +61,22 @@ describe('Storage', function () {
 				type: 'ready',
 				data: {
 					options : {
-						host:     'pellefant.db.elephantsql.com',
-						port:     '5432',
-						user:     'kzxkistt',
-						password: 'DWl5R1bXUAZ5HcZ-hItxW4cXQXwDs8Ga',
-						database: 'kzxkistt',
-						table:    'reekoh_test',
-						fields:   '{"string_type" : {"source_field":"name"}}'
+						host:     HOST,
+						port:     PORT,
+						user:     USER,
+						password: PASSWORD,
+						database: DATABASE,
+						table:    TABLE,
+						fields:   JSON.stringify({
+										_id				   : {source_field:'_id', data_type: 'Integer'},
+										co2_field      	   : {source_field:'co2', data_type: 'String'},
+										temp_field     	   : {source_field:'temp', data_type: 'Integer'},
+										quality_field  	   : {source_field:'quality', data_type: 'Float'},
+										reading_time_field : {source_field:'reading_time', data_type: 'DateTime', format: 'YYYY-MM-DDTHH:mm:ss.SSSSZ'},
+										metadata_field 	   : {source_field:'metadata', data_type: 'String'},
+										random_data_field  : {source_field:'random_data'},
+										is_normal_field    : {source_field:'is_normal', data_type: 'Boolean'}
+									})
 					}
 				}
 			}, function (error) {
@@ -59,10 +89,47 @@ describe('Storage', function () {
 		it('should process the data', function (done) {
 			storage.send({
 				type: 'data',
-				data: {
-					name: 'Mr. Reddit'
-				}
+				data: record
 			}, done);
 		});
 	});
+
+	describe('#data', function () {
+		it('should have inserted the data', function (done) {
+			this.timeout(10000);
+
+			var pg = require('pg');
+
+			var connection = 'postgres://' + USER + ':' + PASSWORD + '@' + HOST + ':' + PORT + '/' + DATABASE;
+
+			var client = new pg.Client(connection);
+			client.connect(function(err) {
+				client.query('SELECT * FROM ' + TABLE + ' WHERE _id = ' + _ID, function(err, result) {
+
+					should.exist(result.rows[0]);
+					var resp = result.rows[0];
+
+					//cleanup for JSON stored string
+					var cleanMetadata = resp.metadata_field.replace(/\\"/g, '"');
+					var str  = JSON.stringify('"' + record.metadata + '"');
+					var str2 = JSON.stringify(cleanMetadata);
+
+
+					should.equal(record.co2, resp.co2_field, 'Data validation failed. Field: co2');
+					should.equal(record.temp, resp.temp_field, 'Data validation failed. Field: temp');
+					should.equal(record.quality, resp.quality_field, 'Data validation failed. Field: quality');
+					should.equal(record.random_data, resp.random_data_field, 'Data validation failed. Field: random_data');
+					should.equal(moment(record.reading_time).format('YYYY-MM-DD HH:mm:ss.SSSSZ'),
+										moment(resp.reading_time_field).format('YYYY-MM-DD HH:mm:ss.SSSSZ'),
+							            'Data validation failed. Field: reading_time');
+					should.equal(str, str2, 'Data validation failed. Field: metadata');
+
+					done();
+
+				});
+			});
+
+		});
+	});
+
 });
