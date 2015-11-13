@@ -1,8 +1,3 @@
-/* The config.json file is where you specify additional configuration needed by
- * your plugin. The details you specify here will be translated to a form on the
- * UI. The values supplied by the users will then get injected as options on the
- * platform on ready event.
- */
 {
   "host": {
 	"label": "Host",
