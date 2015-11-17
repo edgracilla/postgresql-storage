@@ -1,24 +1,20 @@
 'use strict';
 
-var platform = require('./platform'),
-	Pg 		 = require('pg').Client,
-	moment   = require('moment'),
+var _        = require('lodash'),
 	async    = require('async'),
-	isJSON   = require('is-json'),
-	_        = require('lodash'),
+	moment   = require('moment'),
+	platform = require('./platform'),
 	parseFields, tableName, client;
-
 
 /*
  * Listen for the data event.
  */
 platform.on('data', function (data) {
-
 	var columnList,
 		valueList,
 		first = true;
 
-	async.forEachOf(parseFields, function(field, key, callback) {
+	async.forEachOf(parseFields, function (field, key, callback) {
 
 		var datum = data[field.source_field],
 			processedDatum;
@@ -27,14 +23,11 @@ platform.on('data', function (data) {
 			if (field.data_type) {
 				try {
 					if (field.data_type === 'String') {
-
-						if (isJSON(datum))
+						if (_.isPlainObject(datum))
 							processedDatum = '\'' + JSON.stringify(datum) + '\'';
 						else
-							processedDatum = '\'' + String(datum) + '\'';
-
-
-					} else if (field.data_type === 'Integer')  {
+							processedDatum = '\'' + datum + '\'';
+					} else if (field.data_type === 'Integer') {
 
 						var intData = parseInt(datum);
 
@@ -43,7 +36,7 @@ platform.on('data', function (data) {
 						else
 							processedDatum = intData;
 
-					} else if (field.data_type === 'Float')  {
+					} else if (field.data_type === 'Float') {
 
 						var floatData = parseFloat(datum);
 
@@ -68,14 +61,12 @@ platform.on('data', function (data) {
 					} else if (field.data_type === 'DateTime') {
 
 						var dtm = new Date(datum);
-						if (!isNaN( dtm.getTime())) {
+						if (!isNaN(dtm.getTime())) {
 
 							if (field.format !== undefined)
 								processedDatum = '\'' + moment(dtm).format(field.format) + '\'';
 							else
 								processedDatum = '\'' + dtm + '\'';
-
-
 						} else {
 							processedDatum = '\'' + datum + '\'';
 						}
@@ -83,39 +74,35 @@ platform.on('data', function (data) {
 				} catch (e) {
 					if (typeof datum === 'number')
 						processedDatum = datum;
-					else if (isJSON(datum))
+					else if (_.isPlainObject(datum))
 						processedDatum = JSON.stringify(datum);
 					else
 						processedDatum = '\'' + datum + '\'';
 				}
-
 			} else {
 				if (typeof datum === 'number')
 					processedDatum = datum;
-				else if (isJSON(datum))
+				else if (_.isPlainObject(datum))
 					processedDatum = '\'' + JSON.stringify(datum) + '\'';
 				else
 					processedDatum = '\'' + datum + '\'';
 			}
-
 		} else {
 			processedDatum = null;
 		}
 
 		if (!first) {
-			valueList  = valueList  + ',' + processedDatum;
-			columnList = columnList  + ',' + key;
+			valueList = valueList + ',' + processedDatum;
+			columnList = columnList + ',' + key;
 		} else {
-			first      = false;
-			valueList  = processedDatum;
+			first = false;
+			valueList = processedDatum;
 			columnList = key;
 		}
 
 		callback();
-
-	}, function() {
-		client.query('insert into ' + tableName + ' (' + columnList + ') values (' + valueList + ')', function(reqErr, queryset) {
-
+	}, function () {
+		client.query('insert into ' + tableName + ' (' + columnList + ') values (' + valueList + ')', function (reqErr) {
 			if (reqErr) {
 				console.error('Error creating record on PostgreSQL', reqErr);
 				platform.handleException(reqErr);
@@ -125,7 +112,6 @@ platform.on('data', function (data) {
 					data: valueList
 				}));
 			}
-
 		});
 	});
 });
@@ -137,16 +123,15 @@ platform.on('close', function () {
 	var domain = require('domain');
 	var d = domain.create();
 
-	d.on('error', function(error) {
+	d.on('error', function (error) {
 		console.error(error);
 		platform.handleException(error);
 		platform.notifyClose();
 	});
 
-	d.run(function() {
-		// TODO: Release all resources and close connections etc.
+	d.run(function () {
 		client.end();
-		platform.notifyClose(); // Notify the platform that resources have been released.
+		platform.notifyClose();
 	});
 });
 
@@ -154,26 +139,34 @@ platform.on('close', function () {
  * Listen for the ready event.
  */
 platform.once('ready', function (options) {
+	try {
+		parseFields = JSON.parse(options.fields);
+	}
+	catch (ex) {
+		platform.handleException(new Error('Invalid option parameter: fields. Must be a valid JSON String.'));
 
-	parseFields = JSON.parse(options.fields);
+		return setTimeout(function () {
+			process.exit(1);
+		}, 2000);
+	}
 
-	async.forEachOf(parseFields, function(field, key, callback) {
-		if (_.isEmpty(field.source_field)){
-			callback( new Error('Source field is missing for ' + key + ' in PostgreSQL Plugin'));
-		} else if (field.data_type  && (field.data_type !== 'String' && field.data_type !== 'Integer' &&
-			field.data_type !== 'Float'  && field.data_type !== 'Boolean' &&
+	async.forEachOf(parseFields, function (field, key, callback) {
+		if (_.isEmpty(field.source_field)) {
+			callback(new Error('Source field is missing for ' + key + ' in PostgreSQL Plugin'));
+		} else if (field.data_type && (field.data_type !== 'String' && field.data_type !== 'Integer' &&
+			field.data_type !== 'Float' && field.data_type !== 'Boolean' &&
 			field.data_type !== 'DateTime')) {
 			callback(new Error('Invalid Data Type for ' + key + ' allowed data types are (String, Integer, Float, Boolean, DateTime) in PostgreSQL Plugin'));
 		} else
 			callback();
-	}, function(e) {
-
+	}, function (e) {
 		if (e) {
 			console.error('Error parsing JSON field configuration for PostgreSQL.', e);
 			platform.handleException(e);
 			return;
 		}
 
+		var Pg = require('pg').native;
 		var connection = 'postgres://' + options.user + ':' + options.password + '@' + options.host;
 
 		if (options.port)
@@ -181,7 +174,7 @@ platform.once('ready', function (options) {
 
 		connection = connection + '/' + options.database;
 
-		client = new Pg(connection);
+		client = new Pg.Client(connection);
 
 		tableName = options.table;
 
@@ -189,12 +182,14 @@ platform.once('ready', function (options) {
 			if (err) {
 				console.error('Error connecting in PostgreSQL.', err);
 				platform.handleException(err);
+
+				return setTimeout(function () {
+					process.exit(1);
+				}, 2000);
 			} else {
-				platform.log('Connected to PostgreSQL.');
+				platform.log('PostgreSQL Storage initialized.');
 				platform.notifyReady();
 			}
 		});
-
 	});
-
 });
