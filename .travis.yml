@@ -3,3 +3,14 @@ node_js:
   - "4.2.2"
 notifications:
   slack: reekoh:eFsOWQBeXXs9jKVcqiqo4Ifg
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - build-essential
+      - postgresql-devel
+      - gcc-4.8
+      - g++-4.8
+      - cpp-4.8
+      - make
