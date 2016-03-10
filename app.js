@@ -6,10 +6,7 @@ var _        = require('lodash'),
 	platform = require('./platform'),
 	parseFields, tableName, client;
 
-/*
- * Listen for the data event.
- */
-platform.on('data', function (data) {
+let sendData = (data) => {
 	var columnList,
 		valueList,
 		first = true;
@@ -114,6 +111,19 @@ platform.on('data', function (data) {
 			}
 		});
 	});
+};
+
+platform.on('data', function (data) {
+	if(_.isPlainObject(data)){
+		sendData(data);
+	}
+	else if(_.isArray(data)){
+		async.each(data, function(datum){
+			sendData(datum);
+		});
+	}
+	else
+		platform.handleException(new Error(`Invalid data received. Data must be a valid Array/JSON Object or a collection of objects. Data: ${data}`));
 });
 
 /*
