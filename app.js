@@ -12,13 +12,13 @@ var pg            = require('pg').native,
 	isString      = require('lodash.isstring'),
 	isBoolean     = require('lodash.isboolean'),
 	isPlainObject = require('lodash.isplainobject'),
-	connectionString, fieldMapping, tableName, client;
+	connectionString, fieldMapping, tableName;
 
 let insertData = function (data, callback) {
 	pg.connect(connectionString, function (connectionError, client, done) {
 		if (connectionError) return callback(connectionError);
 
-		client.query(knex(tableName).insert(data), (insertError) => {
+		client.query(knex(tableName).insert(data).toString(), (insertError) => {
 			done();
 
 			if (!insertError) {
