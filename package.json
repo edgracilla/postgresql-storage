@@ -1,7 +1,7 @@
 {
   "name": "postgresql-storage",
   "description": "PostgreSQL storage plugin for Reekoh IoT Platform",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "author": "Reekoh, Inc.",
   "main": "app.js",
   "scripts": {
