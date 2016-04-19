@@ -1,125 +1,137 @@
 'use strict';
 
-var _        = require('lodash'),
-	async    = require('async'),
-	moment   = require('moment'),
-	platform = require('./platform'),
-	parseFields, tableName, client;
+var pg            = require('pg').native,
+	knex          = require('knex')({client: 'pg'}),
+	async         = require('async'),
+	isNil         = require('lodash.isnil'),
+	moment        = require('moment'),
+	isArray       = require('lodash.isarray'),
+	isEmpty       = require('lodash.isempty'),
+	isNumber      = require('lodash.isnumber'),
+	platform      = require('./platform'),
+	isString      = require('lodash.isstring'),
+	isBoolean     = require('lodash.isboolean'),
+	isPlainObject = require('lodash.isplainobject'),
+	connectionString, fieldMapping, tableName;
 
-let sendData = (data) => {
-	var columnList,
-		valueList,
-		first = true;
+let insertData = function (data, callback) {
+	pg.connect(connectionString, function (connectionError, client, done) {
+		if (connectionError) return callback(connectionError);
 
-	async.forEachOf(parseFields, function (field, key, callback) {
+		client.query(knex(tableName).insert(data).toString(), (insertError) => {
+			done();
 
-		var datum = data[field.source_field],
+			if (!insertError) {
+				platform.log(JSON.stringify({
+					title: 'Record Successfully inserted to PostgreSQL Database.',
+					data: data
+				}));
+			}
+
+			callback(insertError);
+		});
+	});
+};
+
+let processData = function (data, callback) {
+	let processedData = {};
+
+	async.forEachOf(fieldMapping, (field, key, done) => {
+		let datum = data[field.source_field],
 			processedDatum;
 
-		if (datum !== undefined && datum !== null) {
-			if (field.data_type) {
-				try {
-					if (field.data_type === 'String') {
-						if (_.isPlainObject(datum))
-							processedDatum = '\'' + JSON.stringify(datum) + '\'';
-						else
-							processedDatum = '\'' + datum + '\'';
-					} else if (field.data_type === 'Integer') {
-
-						var intData = parseInt(datum);
+		if (!isNil(datum) && !isEmpty(field.data_type)) {
+			try {
+				if (field.data_type === 'String') {
+					if (isPlainObject(datum))
+						processedDatum = JSON.stringify(datum);
+					else
+						processedDatum = `${datum}`;
+				}
+				else if (field.data_type === 'Integer') {
+					if (isNumber(datum))
+						processedDatum = datum;
+					else {
+						let intData = parseInt(datum);
 
 						if (isNaN(intData))
 							processedDatum = datum; //store original value
 						else
 							processedDatum = intData;
-
-					} else if (field.data_type === 'Float') {
-
-						var floatData = parseFloat(datum);
+					}
+				}
+				else if (field.data_type === 'Float') {
+					if (isNumber(datum))
+						processedDatum = datum;
+					else {
+						let floatData = parseFloat(datum);
 
 						if (isNaN(floatData))
 							processedDatum = datum; //store original value
 						else
 							processedDatum = floatData;
-
-					} else if (field.data_type === 'Boolean') {
-
-						var type = typeof datum;
-
-						if ((type === 'string' && datum.toLocaleLowerCase() === 'true') ||
-							(type === 'number' && datum === 1 )) {
-							processedDatum = true;
-						} else if ((type === 'string' && datum.toLocaleLowerCase() === 'false') ||
-							(type === 'number' && datum === 0 )) {
-							processedDatum = false;
-						} else {
-							processedDatum = datum;
-						}
-					} else if (field.data_type === 'DateTime') {
-
-						var dtm = new Date(datum);
-						if (!isNaN(dtm.getTime())) {
-
-							if (field.format !== undefined)
-								processedDatum = '\'' + moment(dtm).format(field.format) + '\'';
-							else
-								processedDatum = '\'' + dtm + '\'';
-						} else {
-							processedDatum = '\'' + datum + '\'';
-						}
 					}
-				} catch (e) {
-					if (typeof datum === 'number')
-						processedDatum = datum;
-					else if (_.isPlainObject(datum))
-						processedDatum = JSON.stringify(datum);
-					else
-						processedDatum = '\'' + datum + '\'';
 				}
-			} else {
-				if (typeof datum === 'number')
-					processedDatum = datum;
-				else if (_.isPlainObject(datum))
-					processedDatum = '\'' + JSON.stringify(datum) + '\'';
+				else if (field.data_type === 'Boolean') {
+					if (isBoolean(datum))
+						processedDatum = datum;
+					else {
+						if ((isString(datum) && datum.toLowerCase() === 'true') || (isNumber(datum) && datum === 1))
+							processedDatum = true;
+						else if ((isString(datum) && datum.toLowerCase() === 'false') || (isNumber(datum) && datum === 0))
+							processedDatum = false;
+						else
+							processedDatum = (datum) ? true : false;
+					}
+				}
+				else if (field.data_type === 'DateTime') {
+					if (moment(datum).isValid() && isEmpty(field.format))
+						processedDatum = datum;
+					else if (moment(datum).isValid() && !isEmpty(field.format))
+						processedDatum = moment(datum).format(field.format);
+					else
+						processedDatum = datum;
+				}
+			}
+			catch (e) {
+				if (isPlainObject(datum))
+					processedDatum = JSON.stringify(datum);
 				else
-					processedDatum = '\'' + datum + '\'';
+					processedDatum = datum;
 			}
-		} else {
+		}
+		else if (!isNil(datum) && isEmpty(field.data_type)) {
+			if (isPlainObject(datum))
+				processedDatum = JSON.stringify(datum);
+			else
+				processedDatum = `${datum}`;
+		}
+		else
 			processedDatum = null;
-		}
 
-		if (!first) {
-			valueList = valueList + ',' + processedDatum;
-			columnList = columnList + ',' + key;
-		} else {
-			first = false;
-			valueList = processedDatum;
-			columnList = key;
-		}
+		processedData[key] = processedDatum;
 
-		callback();
-	}, function () {
-		client.query('insert into ' + tableName + ' (' + columnList + ') values (' + valueList + ')', function (reqErr) {
-			if (reqErr) {
-				console.error('Error creating record on PostgreSQL', reqErr);
-				platform.handleException(reqErr);
-			} else {
-				platform.log(JSON.stringify({
-					title: 'Record Successfully inserted to PostgreSQL.',
-					data: valueList
-				}));
-			}
-		});
+		done();
+	}, () => {
+		callback(null, processedData);
 	});
 };
 
 platform.on('data', function (data) {
-	if(_.isPlainObject(data)){
-		sendData(data);
+	if (isPlainObject(data)) {
+		processData(data, (error, processedData) => {
+			insertData(processedData, (error) => {
+				if (error) platform.handleException(error);
+			});
+		});
 	}
-	else if(_.isArray(data)){
-		async.each(data, function(datum){
-			sendData(datum);
+	else if (isArray(data)) {
+		async.each(data, function (datum) {
+			processData(datum, (error, processedData) => {
+				insertData(processedData, (error) => {
+					if (error) platform.handleException(error);
+				});
+			});
 		});
 	}
 	else
@@ -130,18 +142,19 @@ platform.on('data', function (data) {
  * Event to listen to in order to gracefully release all resources bound to this service.
  */
 platform.on('close', function () {
-	var domain = require('domain');
-	var d = domain.create();
+	var d = require('domain').create();
 
-	d.on('error', function (error) {
+	d.once('error', function (error) {
 		console.error(error);
 		platform.handleException(error);
 		platform.notifyClose();
+		d.exit();
 	});
 
 	d.run(function () {
-		client.end();
+		pg.end();
 		platform.notifyClose();
+		d.exit();
 	});
 });
 
@@ -149,57 +162,68 @@ platform.on('close', function () {
  * Listen for the ready event.
  */
 platform.once('ready', function (options) {
-	try {
-		parseFields = JSON.parse(options.fields);
-	}
-	catch (ex) {
-		platform.handleException(new Error('Invalid option parameter: fields. Must be a valid JSON String.'));
+	tableName = options.table;
 
-		return setTimeout(function () {
-			process.exit(1);
-		}, 2000);
-	}
+	async.waterfall([
+		async.constant(options.field_mapping || '{}'),
+		async.asyncify(JSON.parse),
+		(obj, done) => {
+			fieldMapping = obj;
+			done();
+		}
+	], (parseError) => {
+		if (parseError) {
+			platform.handleException(new Error('Invalid field mapping. Must be a valid JSON String.'));
 
-	async.forEachOf(parseFields, function (field, key, callback) {
-		if (_.isEmpty(field.source_field)) {
-			callback(new Error('Source field is missing for ' + key + ' in PostgreSQL Plugin'));
-		} else if (field.data_type && (field.data_type !== 'String' && field.data_type !== 'Integer' &&
-			field.data_type !== 'Float' && field.data_type !== 'Boolean' &&
-			field.data_type !== 'DateTime')) {
-			callback(new Error('Invalid Data Type for ' + key + ' allowed data types are (String, Integer, Float, Boolean, DateTime) in PostgreSQL Plugin'));
-		} else
-			callback();
-	}, function (e) {
-		if (e) {
-			console.error('Error parsing JSON field configuration for PostgreSQL.', e);
-			platform.handleException(e);
-			return;
+			return setTimeout(function () {
+				process.exit(1);
+			}, 2000);
 		}
 
-		var Pg = require('pg').native;
-		var connection = 'postgres://' + options.user + ':' + options.password + '@' + options.host;
+		let isEmpty = require('lodash.isempty');
 
-		if (options.port)
-			connection = connection + ':' + options.port;
+		async.forEachOf(fieldMapping, function (field, key, callback) {
+			if (isEmpty(field.source_field))
+				callback(new Error('Source field is missing for ' + key + ' in PostgreSQL Plugin'));
+			else if (field.data_type && (field.data_type !== 'String' && field.data_type !== 'Integer' &&
+				field.data_type !== 'Float' && field.data_type !== 'Boolean' &&
+				field.data_type !== 'DateTime')) {
 
-		connection = connection + '/' + options.database;
+				callback(new Error('Invalid Data Type for ' + key + ' in field mapping. Allowed data types are String, Integer, Float, Boolean, DateTime'));
+			}
+			else
+				callback();
+		}, function (fieldMapError) {
+			if (fieldMapError) {
+				console.error('Error parsing field mapping.', fieldMapError);
+				platform.handleException(fieldMapError);
 
-		client = new Pg.Client(connection);
-
-		tableName = options.table;
-
-		client.connect(function (err) {
-			if (err) {
-				console.error('Error connecting in PostgreSQL.', err);
-				platform.handleException(err);
-
-				return setTimeout(function () {
+				return setTimeout(() => {
 					process.exit(1);
 				}, 2000);
-			} else {
-				platform.log('PostgreSQL Storage initialized.');
-				platform.notifyReady();
 			}
+
+			let host = options.host, auth = '';
+
+			if (options.user) auth = `${options.user}:${options.password}@`;
+			if (options.port) host = `${host}:${options.port}`;
+
+			connectionString = `postgres://${auth}${host}/${options.database}`;
+
+			pg.connect(connectionString, function (connectionError, client, done) {
+				if (connectionError) {
+					console.error('Error connecting to PostgreSQL Database Server.', connectionError);
+					platform.handleException(connectionError);
+
+					return setTimeout(function () {
+						process.exit(1);
+					}, 2000);
+				} else {
+					platform.log('PostgreSQL Storage initialized.');
+					platform.notifyReady();
+					done();
+				}
+			});
 		});
 	});
 });

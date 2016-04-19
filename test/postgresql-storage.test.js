@@ -63,7 +63,7 @@ describe('Storage', function () {
 						password: PASSWORD,
 						database: DATABASE,
 						table: TABLE,
-						fields: JSON.stringify({
+						field_mapping: JSON.stringify({
 							_id: {source_field: '_id', data_type: 'Integer'},
 							co2_field: {source_field: 'co2', data_type: 'String'},
 							temp_field: {source_field: 'temp', data_type: 'Integer'},
@@ -98,32 +98,35 @@ describe('Storage', function () {
 		it('should have inserted the data', function (done) {
 			this.timeout(10000);
 
-			var pg = require('pg').native;
+			setTimeout(() => {
+				var pg = require('pg').native;
 
-			var connection = 'postgres://' + USER + ':' + PASSWORD + '@' + HOST + ':' + PORT + '/' + DATABASE;
+				var connection = 'postgres://' + USER + ':' + PASSWORD + '@' + HOST + ':' + PORT + '/' + DATABASE;
 
-			var client = new pg.Client(connection);
-			client.connect(function (err) {
-				client.query('SELECT * FROM ' + TABLE + ' WHERE _id = ' + _ID, function (err, result) {
-					should.exist(result.rows[0]);
-					var resp = result.rows[0];
+				var client = new pg.Client(connection);
+				client.connect(function (err) {
+					client.query('SELECT * FROM ' + TABLE + ' WHERE _id = ' + _ID, function (err, result) {
+						console.log(result);
+						should.exist(result.rows[0]);
+						var resp = result.rows[0];
 
-					var cleanMetadata = resp.metadata_field.replace(/\\"/g, '"');
-					var str = JSON.stringify(record.metadata);
-					var str2 = JSON.stringify(cleanMetadata);
+						var cleanMetadata = resp.metadata_field.replace(/\\"/g, '"');
+						var str = JSON.stringify(record.metadata);
+						var str2 = JSON.stringify(cleanMetadata);
 
-					should.equal(record.co2, resp.co2_field, 'Data validation failed. Field: co2');
-					should.equal(record.temp, resp.temp_field, 'Data validation failed. Field: temp');
-					should.equal(record.quality, resp.quality_field, 'Data validation failed. Field: quality');
-					should.equal(record.random_data, resp.random_data_field, 'Data validation failed. Field: random_data');
-					should.equal(moment(record.reading_time).format('YYYY-MM-DD HH:mm:ss.SSSSZ'),
-						moment(resp.reading_time_field).format('YYYY-MM-DD HH:mm:ss.SSSSZ'),
-						'Data validation failed. Field: reading_time');
-					should.equal(str, str2, 'Data validation failed. Field: metadata');
+						should.equal(record.co2, resp.co2_field, 'Data validation failed. Field: co2');
+						should.equal(record.temp, resp.temp_field, 'Data validation failed. Field: temp');
+						should.equal(record.quality, resp.quality_field, 'Data validation failed. Field: quality');
+						should.equal(record.random_data, resp.random_data_field, 'Data validation failed. Field: random_data');
+						should.equal(moment(record.reading_time).format('YYYY-MM-DD HH:mm:ss.SSSSZ'),
+							moment(resp.reading_time_field).format('YYYY-MM-DD HH:mm:ss.SSSSZ'),
+							'Data validation failed. Field: reading_time');
+						should.equal(str, str2, 'Data validation failed. Field: metadata');
 
-					done();
+						done();
+					});
 				});
-			});
+			}, 5000);
 		});
 	});
 });
