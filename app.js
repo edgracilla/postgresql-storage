@@ -1,7 +1,6 @@
 'use strict';
 
 var pg            = require('pg').native,
-	knex          = require('knex')({client: 'pg'}),
 	async         = require('async'),
 	isNil         = require('lodash.isnil'),
 	moment        = require('moment'),
@@ -15,18 +14,13 @@ var pg            = require('pg').native,
 	connectionString, fieldMapping, tableName;
 
 let insertData = function (data, callback) {
-	pg.connect(connectionString, function (connectionError, client, done) {
+	pg.connect(connectionString, (connectionError, client, done) => {
 		if (connectionError) return callback(connectionError);
 
-		client.query(knex(tableName).insert(data).toString(), (insertError) => {
-			done();
+		let query = `insert into ${tableName} (${data.columns.join(', ')}) values (${data.values.join(', ')})`;
 
-			if (!insertError) {
-				platform.log(JSON.stringify({
-					title: 'Record Successfully inserted to PostgreSQL Database.',
-					data: data
-				}));
-			}
+		client.query(query, data.data, (insertError) => {
+			done(); // Release connection and bring back to pool.
 
 			callback(insertError);
 		});
@@ -34,9 +28,19 @@ let insertData = function (data, callback) {
 };
 
 let processData = function (data, callback) {
-	let processedData = {};
+	let keyCount      = 0,
+		processedData = {
+			columns: [],
+			values: [],
+			data: []
+		};
 
 	async.forEachOf(fieldMapping, (field, key, done) => {
+		keyCount++;
+
+		processedData.columns.push(`"${key}"`);
+		processedData.values.push(`$${keyCount}`);
+
 		let datum = data[field.source_field],
 			processedDatum;
 
@@ -109,7 +113,7 @@ let processData = function (data, callback) {
 		else
 			processedDatum = null;
 
-		processedData[key] = processedDatum;
+		processedData.data.push(processedDatum);
 
 		done();
 	}, () => {
@@ -121,15 +125,29 @@ platform.on('data', function (data) {
 	if (isPlainObject(data)) {
 		processData(data, (error, processedData) => {
 			insertData(processedData, (error) => {
-				if (error) platform.handleException(error);
+				if (!error) {
+					platform.log(JSON.stringify({
+						title: 'Record Successfully inserted to PostgreSQL Database.',
+						data: data
+					}));
+				}
+				else
+					platform.handleException(error);
 			});
 		});
 	}
 	else if (isArray(data)) {
-		async.each(data, function (datum) {
+		async.each(data, (datum) => {
 			processData(datum, (error, processedData) => {
 				insertData(processedData, (error) => {
-					if (error) platform.handleException(error);
+					if (!error) {
+						platform.log(JSON.stringify({
+							title: 'Record Successfully inserted to PostgreSQL Database.',
+							data: datum
+						}));
+					}
+					else
+						platform.handleException(error);
 				});
 			});
 		});
@@ -205,8 +223,16 @@ platform.once('ready', function (options) {
 
 			let host = options.host, auth = '';
 
-			if (options.user) auth = `${options.user}:${options.password}@`;
-			if (options.port) host = `${host}:${options.port}`;
+			if (options.port)
+				host = `${host}:${options.port}`;
+
+			if (options.user)
+				auth = `${options.user}`;
+
+			if (options.password)
+				auth = `${auth}:${options.password}@`;
+			else if (options.user)
+				auth = `${auth}:@`;
 
 			connectionString = `postgres://${auth}${host}/${options.database}`;
 
