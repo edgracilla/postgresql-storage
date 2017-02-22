@@ -8,7 +8,7 @@ const amqp = require('amqplib')
 const moment = require('moment')
 const should = require('should')
 
-const _ID = new Date().getTime()
+const ID = new Date().getTime()
 const INPUT_PIPE = 'demo.pipe.storage'
 const BROKER = 'amqp://guest:guest@127.0.0.1/'
 
@@ -32,7 +32,7 @@ CREATE TABLE reekoh_table (
 */
 
 let record = {
-  _id: _ID,
+  _id: ID,
   co2: '11%',
   temp: 23,
   quality: 11.25,
@@ -132,7 +132,7 @@ describe('Postgres Storage', function () {
         client.connect(function (err) {
           if (err) return console.log(err)
 
-          client.query('SELECT * FROM ' + conf.table + ' WHERE _id = ' + _ID, function (err, result) {
+          client.query('SELECT * FROM ' + conf.table + ' WHERE _id = ' + ID, function (err, result) {
             if (err) return console.log(err)
 
             should.exist(result.rows[0])
