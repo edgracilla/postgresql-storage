@@ -1,7 +1,6 @@
 'use strict'
 
 const reekoh = require('reekoh')
-const config = require('./config.js')
 const _plugin = new reekoh.plugins.Storage()
 
 const pg = require('pg').native
@@ -15,9 +14,9 @@ const isString = require('lodash.isstring')
 const isBoolean = require('lodash.isboolean')
 const isPlainObject = require('lodash.isplainobject')
 
-let connectionString = null
-let fieldMapping = null
 let tableName = null
+let fieldMapping = null
+let connectionString = null
 
 let insertData = (data, callback) => {
   pg.connect(connectionString, (connectionError, client, done) => {
@@ -127,14 +126,13 @@ let processData = (data, callback) => {
 }
 
 _plugin.on('data', (data) => {
-
   if (isPlainObject(data)) {
     processData(data, (error, processedData) => {
       if (error) return console.log(error)
 
       insertData(processedData, (error) => {
         if (!error) {
-          process.send({ type: 'processed'})
+          // process.send({type: 'processed'})
           _plugin.log(JSON.stringify({
             title: 'Record Successfully inserted to PostgreSQL Database.',
             data: data
@@ -151,7 +149,7 @@ _plugin.on('data', (data) => {
 
         insertData(processedData, (error) => {
           if (!error) {
-            process.send({ type: 'processed'})
+            process.send({type: 'processed'})
             _plugin.log(JSON.stringify({
               title: 'Record Successfully inserted to PostgreSQL Database.',
               data: datum
@@ -168,12 +166,10 @@ _plugin.on('data', (data) => {
 })
 
 _plugin.once('ready', () => {
-  let err = config.validate(_plugin.config)
-  if (err) return console.error('Config Validation Error: \n', err)
-
   let options = _plugin.config
+
   tableName = options.table
-  fieldMapping = options.field_mapping
+  fieldMapping = options.fieldMapping
 
   async.forEachOf(fieldMapping, function (field, key, callback) {
     if (isEmpty(field.source_field)) {
@@ -202,7 +198,9 @@ _plugin.once('ready', () => {
 
     if (options.user) { auth = `${options.user}` }
 
-    if (options.password) { auth = `${auth}:${options.password}@` } else if (options.user) {
+    if (options.password) {
+      auth = `${auth}:${options.password}@`
+    } else if (options.user) {
       auth = `${auth}:@`
     }
 
@@ -218,11 +216,11 @@ _plugin.once('ready', () => {
         }, 2000)
       } else {
         _plugin.log('PostgreSQL Storage initialized.')
-        process.send({ type: 'ready' })
+        _plugin.emit('init')
         done()
       }
     })
   })
-
 })
 
+module.exports = _plugin

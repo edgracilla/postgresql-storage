@@ -4,7 +4,7 @@ MAINTAINER Reekoh
 
 WORKDIR /home
 
-# Install dependencies
+# copy files
 ADD . /home
 
 # Update the repository sources list once more

@@ -2,17 +2,34 @@
 
 'use strict'
 
-let pg = require('pg').native
+
+const pg = require('pg').native
 const amqp = require('amqplib')
 const moment = require('moment')
 const should = require('should')
-const cp = require('child_process')
 
 const _ID = new Date().getTime()
+const INPUT_PIPE = 'demo.pipe.storage'
+const BROKER = 'amqp://guest:guest@127.0.0.1/'
 
-let _storage = null
+let _app = null
+let _conn = null
 let _channel = null
-let _conn = {}
+
+/*
+
+CREATE TABLE reekoh_table (
+  _id bigint primary key,
+  co2_field varchar(40) NOT NULL,
+  temp_field int NOT NULL,
+  quality_field decimal NOT NULL,
+  reading_time_field timestamp NULL,
+  metadata_field text NOT NULL,
+  random_data_field text NOT NULL,
+  is_normal_field boolean
+);
+
+*/
 
 let record = {
   _id: _ID,
@@ -32,7 +49,7 @@ let conf = {
   password: 'verysecret',
   database: 'reekoh',
   table: 'reekoh_table',
-  field_mapping: {
+  fieldMapping: {
     _id: {
       source_field: '_id',
       data_type: 'Integer'
@@ -72,65 +89,44 @@ describe('Postgres Storage', function () {
   this.slow(5000)
 
   before('init', () => {
-    process.env.INPUT_PIPE = 'demo.pipe.storage'
-    process.env.BROKER = 'amqp://guest:guest@127.0.0.1/'
+    process.env.BROKER = BROKER
+    process.env.INPUT_PIPE = INPUT_PIPE
     process.env.CONFIG = JSON.stringify(conf)
 
-    amqp.connect(process.env.BROKER)
-      .then((conn) => {
-        _conn = conn
-        return conn.createChannel()
-      }).then((channel) => {
-        _channel = channel
-      }).catch((err) => {
-        console.log(err)
-      })
-
+    amqp.connect(BROKER).then((conn) => {
+      _conn = conn
+      return conn.createChannel()
+    }).then((channel) => {
+      _channel = channel
+    }).catch((err) => {
+      console.log(err)
+    })
   })
 
   after('terminate child process', function () {
     _conn.close()
-    setTimeout(function () {
-      _storage.kill('SIGKILL')
-    }, 3000)
   })
 
-  describe('#spawn', function () {
-    it('should spawn a child process', function () {
-      should.ok(_storage = cp.fork(process.cwd()), 'Child process not spawned.')
-    })
-  })
-
-  describe('#handShake', function () {
-    it('should notify the parent process when ready within 5 seconds', function (done) {
-      this.timeout(5000)
-
-      _storage.on('message', function (message) {
-        if (message.type === 'ready') {
-          done()
-        }
-      })
+  describe('#start', function () {
+    it('should start the app', function (done) {
+      this.timeout(8000)
+      _app = require('../app')
+      _app.once('init', done)
     })
   })
 
   describe('#data', function () {
     it('should process the data', function (done) {
-      this.timeout(8000)
-
-      _channel.sendToQueue(process.env.INPUT_PIPE, new Buffer(JSON.stringify(record)))
-
-      _storage.on('message', (msg) => {
-        if (msg.type === 'processed') done()
-      })
+      this.timeout(15000)
+      _channel.sendToQueue(INPUT_PIPE, new Buffer(JSON.stringify(record)))
+      setTimeout(done, 10000)
     })
 
     it('should have inserted the data', function (done) {
       this.timeout(10000)
 
       setTimeout(() => {
-
         let connection = 'postgres://' + conf.user + ':' + conf.password + '@' + conf.host + ':' + conf.port + '/' + conf.database
-
         let client = new pg.Client(connection)
 
         client.connect(function (err) {

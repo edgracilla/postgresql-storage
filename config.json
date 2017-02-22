@@ -35,7 +35,7 @@
 	"required": false,
 	"help": "(Optional) Password for PostgreSQL Server Authentication."
   },
-  "field_mapping": {
+  "fieldMapping": {
 	"label": "Field Mapping",
 	"type": "JSON",
 	"required": true,
