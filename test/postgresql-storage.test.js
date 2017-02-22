@@ -103,8 +103,9 @@ describe('Postgres Storage', function () {
     })
   })
 
-  after('terminate child process', function () {
+  after('terminate child process', function (done) {
     _conn.close()
+    done()
   })
 
   describe('#start', function () {
