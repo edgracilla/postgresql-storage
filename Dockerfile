@@ -1,25 +1,17 @@
-FROM node
+FROM node:boron
 
 MAINTAINER Reekoh
 
-WORKDIR /home
+RUN apt-get update && apt-get install -y build-essential
+RUN apt-get install postgresql-client-9.4 libpq-dev -y
 
-# copy files
-ADD . /home
+RUN mkdir -p /home/node/postgresql-storage
+COPY . /home/node/postgresql-storage
 
-# Update the repository sources list once more
-RUN sudo apt-get update && apt-get install -y \
-    postgresql-client-9.4 \
-    libpq-dev
+WORKDIR /home/node/postgresql-storage
 
-# install package.json dependencies
-RUN npm install
+# Install dependencies
+RUN npm install pm2 yarn -g
+RUN yarn install
 
-# setting need environment variables
-ENV INPUT_PIPE="demo.pipe.storage" \
-    CONFIG="{}" \
-    LOGGERS="" \
-    EXCEPTION_LOGGERS="" \
-    BROKER="amqp://guest:guest@172.17.0.2/"
-
-CMD ["node", "app"]
+CMD ["pm2-docker", "--json", "app.yml"]

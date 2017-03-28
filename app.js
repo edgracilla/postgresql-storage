@@ -1,7 +1,7 @@
 'use strict'
 
 const reekoh = require('reekoh')
-const _plugin = new reekoh.plugins.Storage()
+const plugin = new reekoh.plugins.Storage()
 
 const pg = require('pg').native
 const async = require('async')
@@ -125,7 +125,7 @@ let processData = (data, callback) => {
   })
 }
 
-_plugin.on('data', (data) => {
+plugin.on('data', (data) => {
   if (isPlainObject(data)) {
     processData(data, (error, processedData) => {
       if (error) return console.log(error)
@@ -133,12 +133,12 @@ _plugin.on('data', (data) => {
       insertData(processedData, (error) => {
         if (!error) {
           // process.send({type: 'processed'})
-          _plugin.log(JSON.stringify({
+          plugin.log(JSON.stringify({
             title: 'Record Successfully inserted to PostgreSQL Database.',
             data: data
           }))
         } else {
-          _plugin.logException(error)
+          plugin.logException(error)
         }
       })
     })
@@ -150,23 +150,23 @@ _plugin.on('data', (data) => {
         insertData(processedData, (error) => {
           if (!error) {
             process.send({type: 'processed'})
-            _plugin.log(JSON.stringify({
+            plugin.log(JSON.stringify({
               title: 'Record Successfully inserted to PostgreSQL Database.',
               data: datum
             }))
           } else {
-            _plugin.logException(error)
+            plugin.logException(error)
           }
         })
       })
     })
   } else {
-    _plugin.logException(new Error(`Invalid data received. Data must be a valid Array/JSON Object or a collection of objects. Data: ${data}`))
+    plugin.logException(new Error(`Invalid data received. Data must be a valid Array/JSON Object or a collection of objects. Data: ${data}`))
   }
 })
 
-_plugin.once('ready', () => {
-  let options = _plugin.config
+plugin.once('ready', () => {
+  let options = plugin.config
 
   tableName = options.table
   fieldMapping = options.fieldMapping
@@ -182,7 +182,7 @@ _plugin.once('ready', () => {
   }, function (fieldMapError) {
     if (fieldMapError) {
       console.error('Error parsing field mapping.', fieldMapError)
-      _plugin.logException(fieldMapError)
+      plugin.logException(fieldMapError)
 
       return setTimeout(() => {
         process.exit(1)
@@ -209,18 +209,18 @@ _plugin.once('ready', () => {
     pg.connect(connectionString, function (connectionError, client, done) {
       if (connectionError) {
         console.error('Error connecting to PostgreSQL Database Server.', connectionError)
-        _plugin.logException(connectionError)
+        plugin.logException(connectionError)
 
         return setTimeout(function () {
           process.exit(1)
         }, 2000)
       } else {
-        _plugin.log('PostgreSQL Storage initialized.')
-        _plugin.emit('init')
+        plugin.log('PostgreSQL Storage initialized.')
+        plugin.emit('init')
         done()
       }
     })
   })
 })
 
-module.exports = _plugin
+module.exports = plugin
